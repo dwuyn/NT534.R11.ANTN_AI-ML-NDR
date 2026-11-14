@@ -20,13 +20,15 @@ VICTIM_HOST = "192.168.217.129"
 BASE32 = "abcdefghijklmnopqrstuvwxyz234567"
 HEX = "0123456789abcdef"
 
+# Intervals are faster than the plan's nominal 60 s / 30 s because
+# DNS_MIN_EVENTS=10 per 5-minute (host, parent) window needs >=1 query/30 s.
 BENIGN_SPECS: tuple[tuple[str, str], ...] = (
     ("benign_dns_browsing", "standard"),
-    ("benign_dns_update", "60s"),
-    ("benign_dns_av", "30s"),
+    ("benign_dns_update", "25s"),
+    ("benign_dns_av", "20s"),
     ("benign_dns_cdn", "5s"),
     ("benign_dns_browsing", "standard"),
-    ("benign_dns_update", "60s"),
+    ("benign_dns_update", "25s"),
 )
 
 ATTACK_SPECS: tuple[tuple[str, str, str, str, float, str], ...] = (

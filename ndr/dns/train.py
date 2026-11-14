@@ -73,6 +73,9 @@ def train_dns(
             f"{len(benign)} benign and {len(attacks)} attack"
         )
 
+    # Validation spans CDN + browsing so the FP/day threshold generalizes
+    # across benign DNS shapes; a single browsing run left CDN/AV/update
+    # benign windows above the threshold.
     benign_train = benign[:3]
     benign_val = benign[3:5]
     benign_test = benign[5:]
