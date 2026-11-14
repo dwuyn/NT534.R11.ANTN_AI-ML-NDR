@@ -11,6 +11,7 @@
 | ML foundation + D1 | Hoàn thành (synthetic) | `ndr/anomaly/`, 22 test D1; `uv run ndr demo --workdir /tmp/ndr-demo --seed 42` | 280 detections; attack recall 0.75; 1 FP/4 h = 6 FP/day; slow scan chưa bắt |
 | D5 beaconing | Hoàn thành (synthetic) | `ndr/beacon/`, `ndr/synth/beacon.py`; `uv run ndr beacon-demo --workdir /tmp/ndr-beacon-demo --seed 42` | 309 detections; attack recall 1.00; test_recall 1.00; test_fp_per_day 0.00 |
 | D7 DNS tunneling | Hoàn thành (synthetic) | `ndr/dns/`, `ndr/features/dns.py`, `ndr/synth/dns.py`; `uv run ndr dns-demo --workdir /tmp/ndr-dns-demo --seed 42` | 971 detections; attack recall 1.00; test_recall 1.00; test_fp_per_day 0.00 |
+| D8 risk fusion | Hoàn thành (synthetic) | `ndr/risk/`; `uv run ndr risk-demo --workdir /tmp/ndr-risk-demo --seed 42` | 58 raw alerts → 16 alerts; reduction 72.41%; MITRE 100%; 12 critical/4 low |
 | NDR thật (Zeek/ELK) | Đang làm | Tài liệu thiết kế; chưa có log Zeek/lab thật | Cần chốt schema, mẫu log, ECS/index template |
 
 ## 2. Tiến độ theo pha
@@ -20,7 +21,7 @@
 | P0 — Nền tảng dữ liệu và baseline | Replay 6 kịch bản; baseline rule-only | Đang làm | Synthetic harness, contracts, ground truth, D1/D5/D7 corpus | Log Zeek thật, ECS/index template, Filebeat/bus, baseline rule-only |
 | P1 — Anomaly detection real-time | Score end-to-end; FP trong ngưỡng | Đang làm | D1 offline pipeline + tests; threshold/FP report | Bus/Redis, inference service, Elasticsearch/Kibana dashboard |
 | P2 — Supervised detectors | Mỗi kịch bản đạt ngưỡng tối thiểu | Đang làm | D5, D7 synthetic hoàn thành; D1 fallback anomaly | D2, D3, D4, D6 |
-| P3 — Risk fusion, response, LLM | Alert queue; auto-block an toàn | Chưa bắt đầu | `AlertEvent`/`FeedbackEvent` contracts | Risk engine, dedup/correlation, response guardrail, LLM triage |
+| P3 — Risk fusion, response, LLM | Alert queue; auto-block an toàn | Đang làm | D8 risk fusion synthetic; `AlertEvent`/`FeedbackEvent` contracts | Response guardrail, Kibana triage/feedback, LLM triage, E2E 6 kịch bản |
 | P4 — MLOps, đánh giá cuối, demo | Tái lập + demo thành công | Chưa bắt đầu | — | MLflow registry, CI, drift, shadow/canary, báo cáo cuối |
 
 ## 3. Detector
@@ -34,7 +35,7 @@
 | D5 | `beaconing_lgbm_iforest` | Hoàn thành (synthetic) | `ndr/beacon/` | test_recall 1.00; test_fp_per_day 0.00; 309 detections | LightGBM + IF, isotonic calibration, native SHAP, host-pair 10-minute conn |
 | D6 | `lateral_lgbm` | Chưa bắt đầu | — | — | Cần SMB/DCE-RPC |
 | D7 | `dns_tunnel_lgbm` | Hoàn thành (synthetic) | `ndr/dns/` | test_recall 1.00; test_fp_per_day 0.00; 971 detections | `dns.log`; lexical + window features, LightGBM + isotonic calibration, native SHAP, host-domain 5-minute windows |
-| D8 | `risk_scorecard` | Chưa bắt đầu | `ndr/contracts.py` (`AlertEvent`) | — | Chờ D5 + D7 để có nhiều tín hiệu |
+| D8 | `risk_scorecard` | Hoàn thành (synthetic) | `ndr/risk/` | 58 raw → 16 alerts; reduction 72.41%; MITRE 100%; 12 critical/4 low | D5/D7 tạo alert; D1 corroboration; dedup 30 phút, enrichment JSON, response chỉ khuyến nghị |
 | D9 | `llm_triage` | Chưa bắt đầu | `ndr/contracts.py` (`AiSummary`) | — | Chỉ contract; chưa có runtime/RAG |
 
 ## 4. Nhật ký milestone
@@ -44,6 +45,13 @@
 | 2026-11-14 | ML foundation + D1 | 22 tests; 280 detections; attack recall 0.75; 1 FP/4 h = 6 FP/day; fast scan/beacon/exfil detected, slow scan missed | `uv run pytest -q`; `uv run ndr demo --workdir /tmp/ndr-demo --seed 42` |
 | 2026-11-14 | D5 beaconing | 29 tests toàn bộ; 309 detections; attack recall 1.00; metadata `test_recall=1.00`, `test_fp_per_day=0.00`; report toàn bộ benign 3 FP/3 h = 24 FP/day (tính cả train/val) | `uv run pytest -q`; `uv run ndr beacon-demo --workdir /tmp/ndr-beacon-demo --seed 42` |
 | 2026-11-14 | D7 DNS tunneling | 43 tests toàn bộ; 971 detections; attack recall 1.00; 6/6 attack runs detected; metadata `test_recall=1.00`, `test_fp_per_day=0.00`; report 1 FP/3 h = 8 FP/day | `uv run pytest -q`; `uv run ndr dns-demo --workdir /tmp/ndr-dns-demo --seed 42` |
+| 2026-11-14 | D8 risk fusion | 57 tests toàn bộ; 58 raw D5/D7 alerts → 16 alerts; reduction 72.41%; MITRE coverage 100%; 12 critical/4 low; 4 D1 corroboration events | `uv run pytest -q`; `uv run ndr risk-demo --workdir /tmp/ndr-risk-demo --seed 42` |
+
+### Ghi chú triển khai D8
+
+- D5/D7 là nguồn alert; D1 chỉ corroboration. Dedup theo `(rule, entity)` trong chuỗi 30 phút; C2 và DNS tunneling cùng `src_ip` trong 30 phút tăng `detectors_agree`/`kill_chain_advance`.
+- `AlertEvent` thêm `first_seen`, `last_seen`, `count`, `reasons` (additive, schema 1.0). Enrichment đọc từ JSON key theo `src_ip`; không có nguồn thật nên demo dùng `demo_enrichment()`.
+- Demo hiện tại không có cặp D5/D7 trùng thời gian nên `agreement_alerts=0`; agreement/kill-chain được unit test xác nhận.
 
 ### Ghi chú triển khai D7
 
@@ -52,10 +60,10 @@
 
 ## 5. Việc tiếp theo
 
-1. D8 risk scorecard: gộp D1 + D5 + D7, dedup/correlation, MITRE mapping.
-2. LLM triage harness: mock alerts, RAG playbook, JSON schema, guardrail, eval so với template.
-3. Real Zeek adapter: `ndr inspect`, log-schema freeze (bao gồm `dns.log` thật).
-4. Thu mẫu log Zeek thật và chuyển trạng thái detector từ `(synthetic)` sang `(lab)`.
+1. LLM triage harness: mock alerts, RAG playbook, JSON schema, guardrail, eval so với template.
+2. Real Zeek adapter: `ndr inspect`, log-schema freeze (bao gồm `dns.log` thật).
+3. Thu mẫu log Zeek thật và chuyển trạng thái detector từ `(synthetic)` sang `(lab)`.
+4. Response guardrail + Kibana triage/feedback (P3.4–P3.5) khi có alert queue thật.
 
 ## 6. Cách cập nhật
 
