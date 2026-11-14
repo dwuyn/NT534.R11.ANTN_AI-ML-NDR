@@ -41,6 +41,7 @@ Thư mục này là bộ tài liệu thiết kế cho việc bổ sung lớp AI/
 | [`01-research-report.md`](./01-research-report.md) | Báo cáo nghiên cứu: hiện trạng, các hướng AI/ML, bằng chứng, dataset, lựa chọn model, rủi ro | Nhóm đồ án, giảng viên |
 | [`02-system-design.md`](./02-system-design.md) | Thiết kế chi tiết: kiến trúc, data contract, feature, model card, risk fusion, deployment, MLOps, bảo mật | Kỹ sư triển khai |
 | [`03-implementation-plan.md`](./03-implementation-plan.md) | Kế hoạch triển khai theo pha, backlog, test, đánh giá, demo, traceability, risk register | Nhóm đồ án, người review |
+| [`04-progress.md`](./04-progress.md) | Theo dõi tiến độ P0–P4, detector D1–D9, milestone log, việc tiếp theo | Nhóm đồ án, người review |
 
 ## 4. Phạm vi tối thiểu (MVP) và bản đầy đủ
 
@@ -76,3 +77,4 @@ Thư mục này là bộ tài liệu thiết kế cho việc bổ sung lớp AI/
 - Phiên bản: `v1.0` — bản thiết kế nền tảng.
 - Việc cần nhóm chốt: phiên bản Zeek và log schema, dung lượng dữ liệu lab, chính sách auto-block, có dùng LLM hay không, mức đầu tư cho graph/sequence model.
 - Mọi ngưỡng trong tài liệu là **giả thuyết cần hiệu chỉnh bằng thực nghiệm**, không phải cam kết kết quả.
+- Tiến độ triển khai thực tế: xem [`04-progress.md`](./04-progress.md).
