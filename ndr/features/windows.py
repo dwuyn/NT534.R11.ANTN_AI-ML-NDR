@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass
 from typing import Iterable, Iterator
 
-from ndr.zeek import ConnRecord
+from ndr.zeek import ConnRecord, DnsRecord
 
 WINDOW_SECONDS = 300
 MIN_EVENTS = 20
@@ -72,3 +72,35 @@ def group_host_pair_windows(
         yield key, sorted(
             buckets[key], key=lambda record: (record.ts, record.uid)
         )
+
+
+DNS_WINDOW_SECONDS = 300
+DNS_MIN_EVENTS = 10
+
+
+@dataclass(frozen=True)
+class DnsKey:
+    src_ip: str
+    parent_domain: str
+    start_ts: float
+
+
+def group_dns_windows(
+    records: Iterable[DnsRecord], window_sec: int = DNS_WINDOW_SECONDS
+) -> Iterator[tuple[DnsKey, list[DnsRecord]]]:
+    from ndr.features.dns import parent_domain
+
+    buckets: dict[DnsKey, list[DnsRecord]] = {}
+    for record in records:
+        start = math.floor(record.ts / window_sec) * window_sec
+        key = DnsKey(
+            src_ip=record.orig_h,
+            parent_domain=parent_domain(record.query),
+            start_ts=float(start),
+        )
+        buckets.setdefault(key, []).append(record)
+
+    for key in sorted(
+        buckets, key=lambda item: (item.start_ts, item.src_ip, item.parent_domain)
+    ):
+        yield key, sorted(buckets[key], key=lambda record: (record.ts, record.uid))
