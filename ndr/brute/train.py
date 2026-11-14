@@ -25,6 +25,7 @@ from ndr.features.brute import (
     load_auth_records,
     save_brute_profile,
 )
+from ndr.features.calibration import ensure_above_benign
 
 BRUTE_MODEL_VERSION = "0.1.0"
 TARGET_FP_PER_DAY = 10.0
@@ -156,24 +157,10 @@ def train_brute(
     val_benign_scores = val_scores[y_val == 0]
     if len(val_benign_scores) == 0:
         raise ValueError("validation has no benign windows")
-    threshold = float(np.quantile(val_benign_scores, quantile))
-    max_benign = float(np.max(val_benign_scores))
-    if threshold >= max_benign:
-        # Isotonic calibration maps perfectly separable validation windows to
-        # exactly 0/1, so the empirical quantile can land on the benign mass
-        # itself. Under ``score >= threshold`` that would flag every benign
-        # window, so place the threshold between the benign mass and the
-        # nearest higher observed score instead.
-        above = val_scores[val_scores > max_benign]
-        threshold = (
-            (max_benign + float(above.min())) / 2.0
-            if above.size
-            else float(np.nextafter(max_benign, np.inf))
-        )
-    if not 0.0 < threshold < 1.0:
-        raise ValueError(
-            f"calibration produced no separable threshold ({threshold})"
-        )
+    threshold = ensure_above_benign(
+        float(np.quantile(val_benign_scores, quantile)),
+        val_benign_scores,
+    )
 
     test_fp = int(np.sum((test_scores >= threshold) & (y_test == 0)))
     test_negatives = int(np.sum(y_test == 0))
