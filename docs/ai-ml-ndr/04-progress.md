@@ -45,6 +45,11 @@
 | 2026-11-14 | D5 beaconing | 29 tests toàn bộ; 309 detections; attack recall 1.00; metadata `test_recall=1.00`, `test_fp_per_day=0.00`; report toàn bộ benign 3 FP/3 h = 24 FP/day (tính cả train/val) | `uv run pytest -q`; `uv run ndr beacon-demo --workdir /tmp/ndr-beacon-demo --seed 42` |
 | 2026-11-14 | D7 DNS tunneling | 43 tests toàn bộ; 971 detections; attack recall 1.00; 6/6 attack runs detected; metadata `test_recall=1.00`, `test_fp_per_day=0.00`; report 1 FP/3 h = 8 FP/day | `uv run pytest -q`; `uv run ndr dns-demo --workdir /tmp/ndr-dns-demo --seed 42` |
 
+### Ghi chú triển khai D7
+
+- Nhịp benign nhanh hơn plan: browsing 1–4 s, update 25 ± 5 s, AV 20 ± 3 s. Lý do: `DNS_MIN_EVENTS=10` cho mỗi cửa sổ 5 phút `(host, parent)`; nhịp 60 s/30 s của plan chỉ tạo 5–10 query/cửa sổ nên gần như không có snapshot benign.
+- Split benign là `[:3]/[3:5]/[5:]` (6/3/3 run) thay vì `[:4]/[4:5]/[5:]` (7/2/3). Split của plan chỉ có browsing trong validation, khiến CDN/AV/update benign vượt threshold và `test_fp_per_day=23904`; split hiện tại đưa FP về 0.
+
 ## 5. Việc tiếp theo
 
 1. D8 risk scorecard: gộp D1 + D5 + D7, dedup/correlation, MITRE mapping.
