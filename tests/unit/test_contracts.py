@@ -77,6 +77,41 @@ def test_alert_and_feedback_roundtrip() -> None:
     assert FeedbackEvent.model_validate_json(feedback.model_dump_json()) == feedback
 
 
+def test_alert_event_risk_fields_roundtrip_and_defaults() -> None:
+    moment = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    alert = AlertEvent(
+        timestamp=moment,
+        first_seen=moment,
+        last_seen=moment,
+        alert_id="alrt-2",
+        risk=90,
+        level="critical",
+        count=3,
+        reasons=["ml_c2_beaconing", "detectors_agree"],
+        entities={"src_ip": "10.0.0.1"},
+        evidence={"uids": ["C1"]},
+        response=ResponseRecommendation(recommended="block_source_and_notify"),
+    )
+    restored = AlertEvent.model_validate_json(alert.model_dump_json())
+    assert restored == alert
+    assert restored.count == 3
+    assert restored.reasons == ["ml_c2_beaconing", "detectors_agree"]
+
+    defaulted = AlertEvent(
+        timestamp=moment,
+        alert_id="alrt-3",
+        risk=10,
+        level="low",
+        entities={},
+        evidence={},
+        response=ResponseRecommendation(recommended="log_and_hunt"),
+    )
+    assert defaulted.count == 1
+    assert defaulted.reasons == []
+    assert defaulted.first_seen is None
+    assert defaulted.last_seen is None
+
+
 def test_naive_datetime_is_rejected() -> None:
     with pytest.raises(ValidationError, match="timezone-aware"):
         Window(

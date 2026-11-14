@@ -104,10 +104,14 @@ class AiSummary(StrictModel):
 class AlertEvent(StrictModel):
     schema_version: Literal["1.0"] = "1.0"
     timestamp: UtcDatetime
+    first_seen: UtcDatetime | None = None
+    last_seen: UtcDatetime | None = None
     alert_id: str
     status: Literal["open", "closed"] = "open"
     risk: int = Field(ge=0, le=100)
     level: Literal["low", "medium", "high", "critical"]
+    count: int = Field(default=1, ge=1)
+    reasons: list[str] = Field(default_factory=list)
     scenario: str | None = None
     entities: dict[str, str]
     evidence: dict[str, list[str]]
