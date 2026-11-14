@@ -25,7 +25,14 @@ def _load_detections(path: Path) -> list[DetectionEvent]:
     return detections
 
 
-def build_report(detections_path: Path, input_dir: Path, out_path: Path) -> dict:
+def build_report(
+    detections_path: Path,
+    input_dir: Path,
+    out_path: Path,
+    *,
+    title: str = "D1 anomaly report (synthetic)",
+    target_fp_per_day: float = 10.0,
+) -> dict:
     detections = _load_detections(detections_path)
     runs = discover_runs(input_dir)
 
@@ -74,7 +81,7 @@ def build_report(detections_path: Path, input_dir: Path, out_path: Path) -> dict
     )
 
     lines = [
-        "# D1 anomaly report (synthetic)",
+        f"# {title}",
         "",
         "| scenario | kind | runs | scored_windows | alerts | detected | recall |",
         "|---|---|---:|---:|---:|---:|---:|",
@@ -99,7 +106,7 @@ def build_report(detections_path: Path, input_dir: Path, out_path: Path) -> dict
             f"{benign_fp_per_day:.2f} FP/day",
             f"- Attack runs detected: {detected_attack_runs}/{attack_runs} "
             f"(recall {attack_recall:.2f})",
-            "- Target FP/day: 10.0 (threshold quantile stored in model metadata)",
+            f"- Target FP/day: {target_fp_per_day:.1f} (threshold quantile stored in model metadata)",
             "- Synthetic data only: numbers validate wiring, not real-world detection.",
         ]
     )
