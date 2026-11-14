@@ -99,6 +99,11 @@ class AiSummary(StrictModel):
     summary: str
     model: str
     confidence: float | None = None
+    evidence: list[str] = Field(default_factory=list)
+    hypotheses: list[str] = Field(default_factory=list)
+    actions: list[str] = Field(default_factory=list)
+    mitre: Mitre = Field(default_factory=Mitre)
+    caveats: list[str] = Field(default_factory=list)
 
 
 class AlertEvent(StrictModel):
@@ -111,6 +116,7 @@ class AlertEvent(StrictModel):
     risk: int = Field(ge=0, le=100)
     level: Literal["low", "medium", "high", "critical"]
     count: int = Field(default=1, ge=1)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     reasons: list[str] = Field(default_factory=list)
     scenario: str | None = None
     entities: dict[str, str]

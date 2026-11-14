@@ -14,6 +14,7 @@ from ndr.contracts import (
     Window,
 )
 from ndr.risk.engine import (
+    ALERT_RULES,
     ANOMALY_RULE_ID,
     EntityEnrichment,
     build_alerts,
@@ -105,6 +106,38 @@ def _beacon(timestamp: float, score: float, **kwargs) -> DetectionEvent:
 
 def _anomaly(timestamp: float, score: float, **kwargs) -> DetectionEvent:
     return _detection(ANOMALY_RULE_ID, timestamp, score, **kwargs)
+
+
+def test_new_detector_metadata_and_stage_order() -> None:
+    expected = {
+        "NDR-ML-SCAN-001": ("port_scan", 1, ["TA0007"], ["T1046"]),
+        "NDR-ML-BRUTE-001": ("brute_force", 2, ["TA0006"], ["T1110"]),
+        "NDR-ML-MALWARE-001": ("malware_download", 3, ["TA0011"], ["T1105"]),
+        "NDR-ML-BEACON-001": ("c2_beaconing", 4, ["TA0011"], ["T1071.001", "T1573"]),
+        "NDR-ML-LATERAL-001": (
+            "lateral_movement",
+            5,
+            ["TA0008", "TA0002"],
+            ["T1021.002", "T1569.002"],
+        ),
+        "NDR-ML-DNS-001": ("dns_tunneling", 6, ["TA0010", "TA0011"], ["T1048", "T1071.004"]),
+    }
+    for rule_id, (scenario, stage, tactic, technique) in expected.items():
+        meta = ALERT_RULES[rule_id]
+        assert meta.scenario == scenario
+        assert meta.stage == stage
+        assert list(meta.tactic) == tactic
+        assert list(meta.technique) == technique
+
+
+def test_alert_confidence_is_max_seed_or_anomaly_score() -> None:
+    alert = build_alerts(
+        [_beacon(0, 0.5), _anomaly(0, 0.9, snapshot_id="fs-anom")]
+    )[0]
+    assert alert.confidence == 0.9
+
+    single = build_alerts([_beacon(0, 0.8)])[0]
+    assert single.confidence == 0.8
 
 
 def test_group_merges_chain_and_keeps_evidence() -> None:

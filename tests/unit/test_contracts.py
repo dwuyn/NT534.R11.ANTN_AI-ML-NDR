@@ -6,11 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from ndr.contracts import (
+    AiSummary,
     AlertEvent,
     DetectionEvent,
     Entity,
     FeatureSnapshot,
     FeedbackEvent,
+    Mitre,
     ModelInfo,
     ResponseRecommendation,
     RuleInfo,
@@ -119,6 +121,20 @@ def test_naive_datetime_is_rejected() -> None:
             end=datetime(2026, 1, 1, tzinfo=timezone.utc),
             size_sec=300,
         )
+
+
+def test_ai_summary_extended_fields_roundtrip() -> None:
+    summary = AiSummary(
+        summary="scan",
+        model="mock",
+        confidence=0.9,
+        evidence=["fs-1"],
+        hypotheses=["port scan"],
+        actions=["check firewall"],
+        mitre=Mitre(tactic=["TA0007"], technique=["T1046"]),
+        caveats=["synthetic"],
+    )
+    assert AiSummary.model_validate_json(summary.model_dump_json()) == summary
 
 
 def test_invalid_risk_and_level_are_rejected() -> None:

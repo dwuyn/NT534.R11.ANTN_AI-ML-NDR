@@ -41,6 +41,27 @@ class DetectorMeta:
 
 
 ALERT_RULES: dict[str, DetectorMeta] = {
+    "NDR-ML-SCAN-001": DetectorMeta(
+        scenario="port_scan",
+        tactic=("TA0007",),
+        technique=("T1046",),
+        stage=1,
+        reason="ml_port_scan",
+    ),
+    "NDR-ML-BRUTE-001": DetectorMeta(
+        scenario="brute_force",
+        tactic=("TA0006",),
+        technique=("T1110",),
+        stage=2,
+        reason="ml_brute_force",
+    ),
+    "NDR-ML-MALWARE-001": DetectorMeta(
+        scenario="malware_download",
+        tactic=("TA0011",),
+        technique=("T1105",),
+        stage=3,
+        reason="ml_malware_download",
+    ),
     "NDR-ML-BEACON-001": DetectorMeta(
         scenario="c2_beaconing",
         tactic=("TA0011",),
@@ -48,11 +69,18 @@ ALERT_RULES: dict[str, DetectorMeta] = {
         stage=4,
         reason="ml_c2_beaconing",
     ),
+    "NDR-ML-LATERAL-001": DetectorMeta(
+        scenario="lateral_movement",
+        tactic=("TA0008", "TA0002"),
+        technique=("T1021.002", "T1569.002"),
+        stage=5,
+        reason="ml_lateral_movement",
+    ),
     "NDR-ML-DNS-001": DetectorMeta(
         scenario="dns_tunneling",
         tactic=("TA0010", "TA0011"),
         technique=("T1048", "T1071.004"),
-        stage=5,
+        stage=6,
         reason="ml_dns_tunneling",
     ),
 }
@@ -422,6 +450,9 @@ def build_alerts(
             detectors_agree,
             kill_chain_advance,
         )
+        confidence = max(
+            event.score for event in [*group.seed_events, *anomalies]
+        )
         reasons = _reasons_for(
             group,
             anomalies,
@@ -453,6 +484,7 @@ def build_alerts(
                 risk=risk,
                 level=risk_level(risk),
                 count=len(group.seed_events),
+                confidence=confidence,
                 reasons=reasons,
                 scenario=group.meta.scenario,
                 entities=_alert_entities(entity),
