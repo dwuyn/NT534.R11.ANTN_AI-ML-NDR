@@ -15,16 +15,16 @@ from ndr.synth.scenarios import ATTACK_SPECS, BASE_TS, BENIGN_SPECS, RunSpec
 PROTO = "tcp"
 
 
-def _utc(timestamp: float) -> datetime:
+def to_utc(timestamp: float) -> datetime:
     return datetime.fromtimestamp(timestamp, tz=timezone.utc)
 
 
-def _uid(run_id: str, index: int) -> str:
+def make_uid(run_id: str, index: int) -> str:
     digest = hashlib.sha1(f"{run_id}:{index}".encode("utf-8")).hexdigest()
     return "C" + digest[:15]
 
 
-def _conn_obj(
+def make_conn_obj(
     ts: float,
     orig_h: str,
     orig_p: int,
@@ -37,6 +37,7 @@ def _conn_obj(
     orig_pkts: int,
     resp_pkts: int,
     conn_state: str | None,
+    proto: str = PROTO,
 ) -> dict:
     obj = {
         "ts": round(float(ts), 6),
@@ -46,7 +47,7 @@ def _conn_obj(
             "resp_h": resp_h,
             "resp_p": int(resp_p),
         },
-        "proto": PROTO,
+        "proto": proto,
         "service": service if service is not None else "-",
         "orig_bytes": int(orig_bytes),
         "resp_bytes": int(resp_bytes),
@@ -59,7 +60,7 @@ def _conn_obj(
     return obj
 
 
-def _browsing(start: float, duration_sec: int, rng: random.Random) -> list[dict]:
+def browsing_events(start: float, duration_sec: int, rng: random.Random) -> list[dict]:
     events: list[dict] = []
     hosts = [f"192.168.217.{index}" for index in range(101, 111)]
     destinations = [f"203.0.113.{index}" for index in range(1, 9)]
@@ -84,7 +85,7 @@ def _browsing(start: float, duration_sec: int, rng: random.Random) -> list[dict]
                 orig_pkts = 0
                 resp_pkts = 0
             events.append(
-                _conn_obj(
+                make_conn_obj(
                     timestamp,
                     host,
                     rng.randint(49152, 65535),
@@ -110,7 +111,7 @@ def _admin(start: float, duration_sec: int, rng: random.Random) -> list[dict]:
         timestamp = start
         while timestamp < end:
             events.append(
-                _conn_obj(
+                make_conn_obj(
                     timestamp,
                     host,
                     rng.randint(49152, 65535),
@@ -138,7 +139,7 @@ def _update(start: float, duration_sec: int, rng: random.Random) -> list[dict]:
         timestamp = start + rng.uniform(0.0, 10.0)
         while timestamp < end:
             events.append(
-                _conn_obj(
+                make_conn_obj(
                     timestamp,
                     host,
                     rng.randint(49152, 65535),
@@ -163,7 +164,7 @@ def _fast_scan(start: float, rng: random.Random) -> list[dict]:
         destination = "192.168.217.129" if index % 2 == 0 else "192.168.217.130"
         state = "S0" if rng.random() < 0.7 else "REJ"
         events.append(
-            _conn_obj(
+            make_conn_obj(
                 start + index * 0.3,
                 "192.168.217.132",
                 rng.randint(49152, 65535),
@@ -186,7 +187,7 @@ def _slow_scan(start: float, rng: random.Random) -> list[dict]:
     ports = (22, 80, 443)
     for index in range(40):
         events.append(
-            _conn_obj(
+            make_conn_obj(
                 start + index * 6.0,
                 "192.168.217.132",
                 rng.randint(49152, 65535),
@@ -208,7 +209,7 @@ def _beacon(start: float, rng: random.Random) -> list[dict]:
     events: list[dict] = []
     for index in range(50):
         events.append(
-            _conn_obj(
+            make_conn_obj(
                 start + index * 6.0,
                 "192.168.217.132",
                 rng.randint(49152, 65535),
@@ -231,7 +232,7 @@ def _exfil(start: float, rng: random.Random) -> list[dict]:
     for index in range(20):
         orig_bytes = rng.randint(2_000_000, 5_000_000)
         events.append(
-            _conn_obj(
+            make_conn_obj(
                 start + index * 6.0,
                 "192.168.217.132",
                 rng.randint(49152, 65535),
@@ -253,7 +254,7 @@ def _build_events(
     scenario: str, start: float, duration_sec: int, rng: random.Random
 ) -> list[dict]:
     if scenario == "benign_browsing":
-        return _browsing(start, duration_sec, rng)
+        return browsing_events(start, duration_sec, rng)
     if scenario == "benign_admin":
         return _admin(start, duration_sec, rng)
     if scenario == "benign_update":
@@ -267,6 +268,27 @@ def _build_events(
     if scenario == "attack_exfil":
         return _exfil(start, rng)
     raise ValueError(f"unknown scenario: {scenario}")
+
+
+def write_run(
+    out_dir: Path,
+    run_id: str,
+    ground_truth: GroundTruthRun,
+    events: list[dict],
+) -> Path:
+    events = sorted(events, key=lambda event: event["ts"])
+    for index, event in enumerate(events):
+        event["uid"] = make_uid(run_id, index)
+
+    run_dir = out_dir / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    with (run_dir / "conn.jsonl").open("w", encoding="utf-8") as handle:
+        for event in events:
+            handle.write(json.dumps(event, sort_keys=True) + "\n")
+    (run_dir / "run.json").write_text(
+        ground_truth.model_dump_json(indent=2), encoding="utf-8"
+    )
+    return run_dir
 
 
 def generate(
@@ -303,23 +325,13 @@ def generate(
         duration_sec = benign_minutes * 60 if spec.kind == "benign" else 300
         rng = random.Random(seed ^ zlib.crc32(run_id.encode("utf-8")))
         events = _build_events(spec.scenario, start, duration_sec, rng)
-        events.sort(key=lambda event: event["ts"])
-        for event_index, event in enumerate(events):
-            event["uid"] = _uid(run_id, event_index)
-
-        run_dir = out_dir / run_id
-        run_dir.mkdir(parents=True, exist_ok=True)
-        with (run_dir / "conn.jsonl").open("w", encoding="utf-8") as handle:
-            for event in events:
-                handle.write(json.dumps(event, sort_keys=True) + "\n")
-
         ground_truth = GroundTruthRun(
             run_id=run_id,
             scenario=spec.scenario,
             kind=spec.kind,
             variant=spec.variant,
-            start_ts=_utc(start),
-            end_ts=_utc(start + duration_sec),
+            start_ts=to_utc(start),
+            end_ts=to_utc(start + duration_sec),
             attacker_ip=spec.attacker_ip,
             victim_ip=spec.victim_ip,
             tool=spec.tool,
@@ -328,9 +340,6 @@ def generate(
             expected_detection=list(spec.expected_detection),
             notes=f"synthetic {spec.variant} run generated by ndr synth",
         )
-        (run_dir / "run.json").write_text(
-            ground_truth.model_dump_json(indent=2), encoding="utf-8"
-        )
-        run_dirs.append(run_dir)
+        run_dirs.append(write_run(out_dir, run_id, ground_truth, events))
 
     return run_dirs
