@@ -62,6 +62,7 @@ def test_profile_json_roundtrip(tmp_path: Path) -> None:
         total_conns=10,
         num_ports=2,
         host_pairs={"10.0.0.1|10.0.0.2"},
+        dst_host_counts={"10.0.0.2": 7},
         feature_mean={"a": 1.0},
         feature_std={"a": 0.5},
     )
@@ -70,5 +71,19 @@ def test_profile_json_roundtrip(tmp_path: Path) -> None:
     loaded = load_profile(path)
     assert loaded.port_counts == {80: 3, 443: 7}
     assert loaded.host_pairs == {"10.0.0.1|10.0.0.2"}
+    assert loaded.dst_host_counts == {"10.0.0.2": 7}
     assert loaded.feature_mean == {"a": 1.0}
     assert loaded.feature_std == {"a": 0.5}
+
+
+def test_dst_host_freq_laplace() -> None:
+    profile = BaselineProfile(
+        feature_set_version="v0.2.0",
+        port_counts={},
+        total_conns=10,
+        num_ports=0,
+        host_pairs=set(),
+        dst_host_counts={"10.0.0.2": 9},
+    )
+    assert profile.dst_host_freq("10.0.0.2") == pytest.approx(10 / 11)
+    assert profile.dst_host_freq("10.0.0.9") == pytest.approx(1 / 11)
