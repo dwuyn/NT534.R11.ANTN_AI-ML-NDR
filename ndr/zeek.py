@@ -6,7 +6,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, TypeVar
+from typing import Iterator
 
 
 @dataclass(frozen=True)
