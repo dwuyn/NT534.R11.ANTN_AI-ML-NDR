@@ -29,11 +29,12 @@ class Window(StrictModel):
 
 
 class Entity(StrictModel):
-    type: Literal["host", "host_pair"] = "host"
+    type: Literal["host", "host_pair", "host_domain"] = "host"
     src_ip: str
     dst_ip: str | None = None
     dst_port: int | None = None
     proto: str | None = None
+    domain: str | None = None
 
 
 class FeatureSnapshot(StrictModel):
