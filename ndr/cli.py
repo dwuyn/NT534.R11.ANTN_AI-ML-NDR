@@ -14,6 +14,14 @@ from ndr.beacon.score import score_beacon
 from ndr.beacon.train import train_beacon
 from ndr.dns.score import score_dns
 from ndr.dns.train import train_dns
+from ndr.risk.engine import (
+    build_alerts,
+    demo_enrichment,
+    load_detections,
+    load_enrichment,
+    write_alerts,
+)
+from ndr.risk.report import build_risk_report
 from ndr.synth.beacon import generate_beacon_corpus
 from ndr.synth.dns import generate_dns_corpus
 from ndr.synth.generate import generate
@@ -206,6 +214,98 @@ def _cmd_dns_demo(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_risk_build(args: argparse.Namespace) -> int:
+    enrichment = (
+        load_enrichment(Path(args.enrichment)) if args.enrichment else {}
+    )
+    detections = load_detections(Path(args.input))
+    alerts = build_alerts(detections, enrichment)
+    write_alerts(alerts, Path(args.out))
+    print(f"wrote {len(alerts)} alerts to {args.out}")
+    return 0
+
+
+def _cmd_risk_report(args: argparse.Namespace) -> int:
+    summary = build_risk_report(
+        alerts_path=Path(args.alerts),
+        input_dir=Path(args.input),
+        out_path=Path(args.out),
+    )
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def _cmd_risk_demo(args: argparse.Namespace) -> int:
+    workdir = Path(args.workdir)
+    detections_dir = workdir / "detections"
+
+    generate(
+        out_dir=workdir / "d1" / "synthetic",
+        seed=args.seed,
+        benign_runs=4,
+        attack_runs=4,
+        benign_minutes=60,
+    )
+    train(
+        input_dir=workdir / "d1" / "synthetic",
+        out_dir=workdir / "d1" / "model",
+        seed=args.seed,
+    )
+    score(
+        input_dir=workdir / "d1" / "synthetic",
+        model_dir=workdir / "d1" / "model",
+        out_path=detections_dir / "anomaly.jsonl",
+    )
+
+    generate_beacon_corpus(
+        out_dir=workdir / "d5" / "synthetic", seed=args.seed
+    )
+    train_beacon(
+        input_dir=workdir / "d5" / "synthetic",
+        out_dir=workdir / "d5" / "model",
+        seed=args.seed,
+    )
+    score_beacon(
+        input_dir=workdir / "d5" / "synthetic",
+        model_dir=workdir / "d5" / "model",
+        out_path=detections_dir / "beacon.jsonl",
+    )
+
+    generate_dns_corpus(out_dir=workdir / "d7" / "synthetic", seed=args.seed)
+    train_dns(
+        input_dir=workdir / "d7" / "synthetic",
+        out_dir=workdir / "d7" / "model",
+        seed=args.seed,
+    )
+    score_dns(
+        input_dir=workdir / "d7" / "synthetic",
+        model_dir=workdir / "d7" / "model",
+        out_path=detections_dir / "dns.jsonl",
+    )
+
+    enrichment = demo_enrichment()
+    (workdir / "enrichment.json").write_text(
+        json.dumps(
+            {
+                address: profile.model_dump()
+                for address, profile in sorted(enrichment.items())
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    alerts = build_alerts(load_detections(detections_dir), enrichment)
+    write_alerts(alerts, workdir / "alerts.jsonl")
+    summary = build_risk_report(
+        alerts_path=workdir / "alerts.jsonl",
+        input_dir=detections_dir,
+        out_path=workdir / "report.md",
+    )
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def _cmd_demo(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir)
     synthetic = workdir / "synthetic"
@@ -346,6 +446,29 @@ def _build_parser() -> argparse.ArgumentParser:
     dns_demo.add_argument("--workdir", default="data/dns-demo")
     dns_demo.add_argument("--seed", type=int, default=42)
     dns_demo.set_defaults(func=_cmd_dns_demo)
+
+    risk_build = subparsers.add_parser(
+        "risk-build", help="deduplicate detections and build risk alerts"
+    )
+    risk_build.add_argument("--input", default="data/detections")
+    risk_build.add_argument("--out", default="data/alerts/alerts.jsonl")
+    risk_build.add_argument("--enrichment", default=None)
+    risk_build.set_defaults(func=_cmd_risk_build)
+
+    risk_report = subparsers.add_parser(
+        "risk-report", help="build the D8 risk fusion report"
+    )
+    risk_report.add_argument("--alerts", default="data/alerts/alerts.jsonl")
+    risk_report.add_argument("--input", default="data/detections")
+    risk_report.add_argument("--out", default="data/reports/risk.md")
+    risk_report.set_defaults(func=_cmd_risk_report)
+
+    risk_demo = subparsers.add_parser(
+        "risk-demo", help="run the full synthetic D8 pipeline"
+    )
+    risk_demo.add_argument("--workdir", default="data/risk-demo")
+    risk_demo.add_argument("--seed", type=int, default=42)
+    risk_demo.set_defaults(func=_cmd_risk_demo)
 
     demo = subparsers.add_parser("demo", help="run the full synthetic pipeline")
     demo.add_argument("--workdir", default="data/demo")
