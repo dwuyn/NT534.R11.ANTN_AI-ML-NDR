@@ -23,7 +23,7 @@ def write_model_card(model_dir: Path, out_path: Path) -> None:
         f"- Version: {metadata.version}",
         f"- Stage: {metadata.stage}",
         f"- Feature set: {metadata.feature_set_version}",
-        f"- Threshold: {metadata.threshold:.6f}",
+        f"- Threshold: {metadata.threshold:.6g}",
         f"- Owner: {metadata.owner}",
         "",
         "## Features",

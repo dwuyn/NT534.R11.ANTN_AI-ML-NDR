@@ -29,7 +29,7 @@ def test_model_card_contains_metadata_and_limitation(tmp_path: Path) -> None:
     write_model_card(model_dir, out)
     text = out.read_text(encoding="utf-8")
     assert "scan_lgbm" in text
-    assert "0.420000" in text
+    assert "0.42" in text
     assert "test_recall" in text
     assert "train_runs: a, b" in text
     assert LIMITATION in text

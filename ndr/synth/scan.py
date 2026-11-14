@@ -26,9 +26,9 @@ BENIGN_SPECS: tuple[tuple[str, str], ...] = (
     ("benign_browsing", "standard"),
     ("benign_admin", "standard"),
     ("benign_update", "standard"),
+    ("benign_mixed", "standard"),
     ("benign_monitoring", "30s"),
     ("benign_backup", "30s"),
-    ("benign_mixed", "standard"),
 )
 
 ATTACK_SPECS: tuple[tuple[str, str], ...] = (
