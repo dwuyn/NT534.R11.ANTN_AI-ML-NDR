@@ -32,9 +32,10 @@ def build_report(
     *,
     title: str = "D1 anomaly report (synthetic)",
     target_fp_per_day: float = 10.0,
+    run_filename: str = "conn.jsonl",
 ) -> dict:
     detections = _load_detections(detections_path)
-    runs = discover_runs(input_dir)
+    runs = discover_runs(input_dir, run_filename)
 
     rows: dict[tuple[str, str], dict[str, int]] = defaultdict(
         lambda: {"runs": 0, "windows": 0, "alerts": 0, "detected": 0}

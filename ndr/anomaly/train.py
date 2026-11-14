@@ -25,7 +25,9 @@ MODEL_VERSION = "0.1.0"
 TARGET_FP_PER_DAY = 10.0
 
 
-def discover_runs(input_dir: Path) -> list[tuple[GroundTruthRun, Path]]:
+def discover_runs(
+    input_dir: Path, filename: str = "conn.jsonl"
+) -> list[tuple[GroundTruthRun, Path]]:
     paths = sorted(input_dir.glob("*/run.json"))
     if not paths:
         raise ValueError(f"no run.json under {input_dir}")
@@ -35,10 +37,10 @@ def discover_runs(input_dir: Path) -> list[tuple[GroundTruthRun, Path]]:
             run = GroundTruthRun.model_validate_json(path.read_text(encoding="utf-8"))
         except Exception as exc:
             raise ValueError(f"{path}: {exc}") from exc
-        conn_path = path.parent / "conn.jsonl"
-        if not conn_path.is_file():
-            raise FileNotFoundError(conn_path)
-        discovered.append((run, conn_path))
+        data_path = path.parent / filename
+        if not data_path.is_file():
+            raise FileNotFoundError(data_path)
+        discovered.append((run, data_path))
     return discovered
 
 
