@@ -1,6 +1,6 @@
 # Tiến độ triển khai NDR + AI/ML
 
-> Cập nhật lần cuối: 2026-11-14  
+> Cập nhật lần cuối: 2026-11-19  
 > Nguồn phase/detector: [`03-implementation-plan.md`](./03-implementation-plan.md) (P0–P4, D1–D9)  
 > Quy ước trạng thái: `Chưa bắt đầu` · `Đang làm` · `Hoàn thành (synthetic)` · `Hoàn thành (lab)` · `Tạm hoãn`
 
@@ -17,6 +17,7 @@
 | D6 lateral movement | Hoàn thành (synthetic) | `ndr/lateral/`, `ndr/features/lateral.py`, `ndr/synth/lateral.py`; `uv run ndr lateral-demo --workdir /tmp/ndr-lateral-demo --seed 42` | 54 detections; attack recall 1.00; test_fp_per_day 0.00; report 1 benign window = 8 FP/day |
 | D8 risk fusion | Hoàn thành (synthetic) | `ndr/risk/`; `uv run ndr risk-demo --workdir /tmp/ndr-risk-demo --seed 42` | 58 raw alerts → 16 alerts; reduction 72.41%; MITRE 100%; 12 critical/4 low |
 | D9 mock LLM triage | Hoàn thành (synthetic) | `ndr/llm/`; `uv run ndr llm-eval --out /tmp/ndr-llm-eval.json` | 6/6 eval alerts; schema/MITRE/evidence/actionability 1.00; hallucination 0.00 |
+| LLM remote provider | Đang làm | `ndr/llm/provider.py`, `tests/unit/test_llm_provider.py`; runbook `05-kaggle-ngrok-llm.md` | OpenAI-compatible/ngrok client; chưa chạy GPU Kaggle thật |
 | Response guardrail | Hoàn thành (synthetic) | `ndr/response/`; `uv run ndr response-sim ...` | 35 allowed, 5 denied (4 risk, 1 confidence); allowlist/TTL/rate-limit/rollback covered by tests |
 | E2E prelab | Hoàn thành (synthetic) | `ndr/prelab.py`; `uv run ndr prelab-demo --workdir /tmp/ndr-prelab --seed 42` | 6 attack scenarios; risk 135 → 40 (70.37% reduction); 36 triage; 40 response decisions |
 | NDR thật (Zeek/ELK) | Đang làm | Tài liệu thiết kế; chưa có log Zeek/lab thật | Cần chốt schema, mẫu log, ECS/index template |
@@ -54,6 +55,7 @@
 | 2026-11-14 | D7 DNS tunneling | 43 tests toàn bộ; 971 detections; attack recall 1.00; 6/6 attack runs detected; metadata `test_recall=1.00`, `test_fp_per_day=0.00`; report 1 FP/3 h = 8 FP/day | `uv run pytest -q`; `uv run ndr dns-demo --workdir /tmp/ndr-dns-demo --seed 42` |
 | 2026-11-14 | D8 risk fusion | 57 tests toàn bộ; 58 raw D5/D7 alerts → 16 alerts; reduction 72.41%; MITRE coverage 100%; 12 critical/4 low; 4 D1 corroboration events | `uv run pytest -q`; `uv run ndr risk-demo --workdir /tmp/ndr-risk-demo --seed 42` |
 | 2026-11-14 | Pre-lab D2/D3/D4/D6/D9 + response + E2E | 158 tests toàn bộ; D2 215, D3 66, D4 384, D6 54 detections; cả 6 detector supervised recall 1.00, test FP/day 0.00; risk 135 → 40 (70.37%); 36 triage; 35 allowed/5 denied | `uv run pytest -q`; `uv run ndr prelab-demo --workdir /tmp/ndr-prelab --seed 42`; 4 detector demos; `uv run ndr llm-eval` |
+| 2026-11-19 | LLM provider OpenAI-compatible/ngrok | Thêm `OpenAICompatibleProvider`, CLI `--provider openai`, env `NDR_LLM_*`, test request/auth/error/guardrail; runbook Kaggle+ngrok | `uv run pytest -q tests/unit/test_llm_provider.py`; `uv run ndr llm-eval --help` |
 
 ### Ghi chú triển khai D8
 
@@ -89,7 +91,7 @@
 
 1. Real Zeek adapter: `ndr inspect`, log-schema freeze cho `conn/ssh/ftp/http/files/ssl/smb/dce_rpc/dns`.
 2. Thu mẫu log Zeek thật, replay 6 kịch bản, chuyển detector từ `(synthetic)` sang `(lab)`.
-3. LLM provider thật thay `MockProvider`, giữ nguyên schema/guardrail/audit/eval; thêm RAG thật.
+3. Chạy LLM provider thật qua Kaggle/ngrok hoặc local; so sánh mock vs remote; giữ nguyên schema/guardrail/audit/eval; thêm RAG thật.
 4. Kibana triage/feedback + alert queue; response guardrail chỉ bật sau khi có phê duyệt.
 5. MLOps: MLflow/CI, drift, shadow/canary, báo cáo đánh giá cuối.
 

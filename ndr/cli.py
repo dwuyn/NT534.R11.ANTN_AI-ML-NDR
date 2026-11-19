@@ -21,7 +21,7 @@ from ndr.dns.train import train_dns
 from ndr.elk import ElkConfig, export_alerts
 from ndr.lab import load_lab_manifest, prepare_lab_runs, run_lab_eval
 from ndr.llm.eval import build_eval_alerts, evaluate_triage
-from ndr.llm.provider import MockProvider
+from ndr.llm.provider import MockProvider, OpenAICompatibleProvider
 from ndr.llm.triage import triage_alerts
 from ndr.lateral.score import score_lateral
 from ndr.lateral.train import train_lateral
@@ -353,11 +353,24 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     return 0
 
 
+def _llm_provider(args: argparse.Namespace) -> MockProvider | OpenAICompatibleProvider:
+    if args.provider == "mock":
+        return MockProvider()
+    return OpenAICompatibleProvider.from_env(
+        base_url=args.base_url,
+        model=args.model,
+        api_key=args.api_key,
+        timeout=args.timeout,
+        max_tokens=args.max_tokens,
+        json_mode=args.json_mode,
+    )
+
+
 def _cmd_llm_triage(args: argparse.Namespace) -> int:
     alerts = load_alerts(Path(args.alerts))
     results = triage_alerts(
         alerts,
-        MockProvider(),
+        _llm_provider(args),
         audit_path=Path(args.audit),
     )
     out_path = Path(args.out)
@@ -370,7 +383,7 @@ def _cmd_llm_triage(args: argparse.Namespace) -> int:
 
 
 def _cmd_llm_eval(args: argparse.Namespace) -> int:
-    summary = evaluate_triage(build_eval_alerts(), MockProvider())
+    summary = evaluate_triage(build_eval_alerts(), _llm_provider(args))
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
@@ -584,6 +597,48 @@ def _add_detector_commands(
     demo.set_defaults(func=run_demo)
 
 
+def _add_llm_provider_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--provider",
+        choices=("mock", "openai"),
+        default="mock",
+        help="mock for offline tests, openai for an OpenAI-compatible server",
+    )
+    parser.add_argument(
+        "--base-url",
+        default=None,
+        help="OpenAI-compatible base URL; defaults to NDR_LLM_BASE_URL",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="served model name; defaults to NDR_LLM_MODEL",
+    )
+    parser.add_argument(
+        "--api-key",
+        default=None,
+        help="bearer token; defaults to NDR_LLM_API_KEY",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        help="request timeout in seconds; defaults to NDR_LLM_TIMEOUT or 120",
+    )
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=None,
+        help="max output tokens; defaults to NDR_LLM_MAX_TOKENS or 700",
+    )
+    parser.add_argument(
+        "--json-mode",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="send response_format=json_object (disable if the server rejects it)",
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ndr")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -779,17 +834,19 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     llm_triage = subparsers.add_parser(
-        "llm-triage", help="triage high/critical alerts with the mock LLM"
+        "llm-triage", help="triage high/critical alerts with a mock or remote LLM"
     )
     llm_triage.add_argument("--alerts", default="data/alerts/alerts.jsonl")
     llm_triage.add_argument("--out", default="data/triage/triage.jsonl")
     llm_triage.add_argument("--audit", default="data/audit/llm.jsonl")
+    _add_llm_provider_args(llm_triage)
     llm_triage.set_defaults(func=_cmd_llm_triage)
 
     llm_eval = subparsers.add_parser(
-        "llm-eval", help="evaluate the mock LLM triage harness"
+        "llm-eval", help="evaluate the LLM triage harness"
     )
     llm_eval.add_argument("--out", default="data/reports/llm-eval.json")
+    _add_llm_provider_args(llm_eval)
     llm_eval.set_defaults(func=_cmd_llm_eval)
 
     response_sim = subparsers.add_parser(
