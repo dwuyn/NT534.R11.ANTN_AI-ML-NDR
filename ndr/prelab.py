@@ -18,7 +18,7 @@ from ndr.contracts import ModelMetadata
 from ndr.dns.score import score_dns
 from ndr.dns.train import train_dns
 from ndr.llm.eval import summarize_triage
-from ndr.llm.provider import MockProvider
+from ndr.llm.provider import MockProvider, TriageProvider
 from ndr.llm.triage import triage_alerts
 from ndr.lateral.score import score_lateral
 from ndr.lateral.train import train_lateral
@@ -66,7 +66,12 @@ def _detector_entry(
     }
 
 
-def run_prelab(workdir: Path, seed: int = 42) -> dict:
+def run_prelab(
+    workdir: Path,
+    seed: int = 42,
+    provider: TriageProvider | None = None,
+) -> dict:
+    provider = provider or MockProvider()
     workdir = Path(workdir)
     detection_dir = workdir / "detections"
     detection_dir.mkdir(parents=True, exist_ok=True)
@@ -203,7 +208,7 @@ def run_prelab(workdir: Path, seed: int = 42) -> dict:
     high_critical = [alert for alert in alerts if alert.level in {"high", "critical"}]
     triage_results = triage_alerts(
         high_critical,
-        MockProvider(),
+        provider,
         audit_path=audit_dir / "llm.jsonl",
     )
     with (workdir / "triage.jsonl").open("w", encoding="utf-8") as handle:

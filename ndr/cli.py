@@ -430,7 +430,11 @@ def _cmd_model_card(args: argparse.Namespace) -> int:
 
 
 def _cmd_prelab_demo(args: argparse.Namespace) -> int:
-    summary = run_prelab(Path(args.workdir), seed=args.seed)
+    summary = run_prelab(
+        Path(args.workdir),
+        seed=args.seed,
+        provider=_llm_provider(args),
+    )
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
 
@@ -870,6 +874,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     prelab.add_argument("--workdir", default="data/prelab")
     prelab.add_argument("--seed", type=int, default=42)
+    _add_llm_provider_args(prelab)
     prelab.set_defaults(func=_cmd_prelab_demo)
 
     lab_prep = subparsers.add_parser(

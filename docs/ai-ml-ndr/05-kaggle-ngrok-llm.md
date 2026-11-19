@@ -137,6 +137,15 @@ uv run ndr llm-triage \
   --audit data/audit/llm-qwen.jsonl
 ```
 
+Chạy toàn bộ prelab synthetic với remote provider:
+
+```bash
+uv run ndr prelab-demo \
+  --provider openai \
+  --timeout 300 \
+  --workdir /tmp/ndr-prelab-qwen
+```
+
 Nếu server không hỗ trợ `response_format`, thêm `--no-json-mode`:
 
 ```bash
