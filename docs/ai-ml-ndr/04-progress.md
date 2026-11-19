@@ -76,6 +76,15 @@
 - Nhịp benign nhanh hơn plan: browsing 1–4 s, update 25 ± 5 s, AV 20 ± 3 s. Lý do: `DNS_MIN_EVENTS=10` cho mỗi cửa sổ 5 phút `(host, parent)`; nhịp 60 s/30 s của plan chỉ tạo 5–10 query/cửa sổ nên gần như không có snapshot benign.
 - Split benign là `[:3]/[3:5]/[5:]` (6/3/3 run) thay vì `[:4]/[4:5]/[5:]` (7/2/3). Split của plan chỉ có browsing trong validation, khiến CDN/AV/update benign vượt threshold và `test_fp_per_day=23904`; split hiện tại đưa FP về 0.
 
+### Ghi chú tích hợp lab (raw Zeek + ELK)
+
+- Phạm vi lab hiện tại: D1 anomaly, D2 port scan, D3 brute force, D5 C2 beaconing, D7 DNS tunneling. **D4 malware download và D6 lateral movement tạm hoãn** vì lab chưa có kịch bản malware và chưa có Windows SMB victim.
+- `ndr lab-prep --raw <zeek-current> --raw <zeek-archive> --manifest data/lab/runs.json --out data/lab/runs`: đọc raw JSON `conn/dns/ssh/ftp.log` (kể cả `.gz`), cắt theo `run.json` manifest, dedup theo `uid`/nội dung, tạo đúng contract `<run>/run.json` + `<log>.jsonl`. Output phải là thư mục rỗng để tránh run cũ.
+- `ndr lab-eval --runs data/lab/runs --workdir data/lab/eval ...`: chạy D1/D2/D3/D5/D7 bằng model hiện có, ghi detection/report/risk/alerts/summary/lab.md. Không train lại trên lab; calibration lab là bước riêng.
+- `ndr elk-export --alerts data/lab/eval/alerts.jsonl --index ndr-alerts`: ghi alert vào Elasticsearch qua `NDR_ES_URL` + `NDR_ES_API_KEY` hoặc user/password, CA qua `NDR_ES_CA_CERT`; thêm `@timestamp` cho Kibana data view `ndr-alerts*`.
+- Raw Zeek JSON được dùng thay vì `filebeat-*` ECS vì schema `ndr.zeek` hiện tại đọc `id.orig_h`, `resp_mime_types`, `resp_fuids`, `server_name`. Filebeat/ECS adapter vẫn là việc riêng.
+- Không có auto-block/pfSense trong adapter này; response vẫn là simulator.
+
 ## 5. Việc tiếp theo
 
 1. Real Zeek adapter: `ndr inspect`, log-schema freeze cho `conn/ssh/ftp/http/files/ssl/smb/dce_rpc/dns`.

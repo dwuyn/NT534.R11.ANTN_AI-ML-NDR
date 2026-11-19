@@ -18,6 +18,8 @@ from ndr.brute.score import score_brute
 from ndr.brute.train import train_brute
 from ndr.dns.score import score_dns
 from ndr.dns.train import train_dns
+from ndr.elk import ElkConfig, export_alerts
+from ndr.lab import load_lab_manifest, prepare_lab_runs, run_lab_eval
 from ndr.llm.eval import build_eval_alerts, evaluate_triage
 from ndr.llm.provider import MockProvider
 from ndr.llm.triage import triage_alerts
@@ -420,6 +422,39 @@ def _cmd_prelab_demo(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_lab_prep(args: argparse.Namespace) -> int:
+    runs = load_lab_manifest(Path(args.manifest))
+    paths = prepare_lab_runs(
+        [Path(path) for path in args.raw], runs, Path(args.out)
+    )
+    print(f"prepared {len(paths)} lab runs in {args.out}")
+    return 0
+
+
+def _cmd_lab_eval(args: argparse.Namespace) -> int:
+    summary = run_lab_eval(
+        runs_dir=Path(args.runs),
+        workdir=Path(args.workdir),
+        model_dirs={
+            "anomaly": Path(args.anomaly_model),
+            "scan": Path(args.scan_model),
+            "brute": Path(args.brute_model),
+            "beacon": Path(args.beacon_model),
+            "dns": Path(args.dns_model),
+        },
+        enrichment_path=Path(args.enrichment) if args.enrichment else None,
+    )
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+def _cmd_elk_export(args: argparse.Namespace) -> int:
+    alerts = load_alerts(Path(args.alerts))
+    exported = export_alerts(alerts, ElkConfig.from_env(args.index))
+    print(f"exported {exported} alerts to {args.index}")
+    return 0
+
+
 def _add_detector_commands(
     subparsers,
     *,
@@ -780,6 +815,36 @@ def _build_parser() -> argparse.ArgumentParser:
     prelab.add_argument("--seed", type=int, default=42)
     prelab.set_defaults(func=_cmd_prelab_demo)
 
+    lab_prep = subparsers.add_parser(
+        "lab-prep", help="split raw Zeek logs into run directories"
+    )
+    lab_prep.add_argument(
+        "--raw", action="append", required=True, help="raw Zeek log directory"
+    )
+    lab_prep.add_argument("--manifest", required=True)
+    lab_prep.add_argument("--out", default="data/lab/runs")
+    lab_prep.set_defaults(func=_cmd_lab_prep)
+
+    lab_eval = subparsers.add_parser(
+        "lab-eval", help="score prepared lab runs with existing models"
+    )
+    lab_eval.add_argument("--runs", default="data/lab/runs")
+    lab_eval.add_argument("--workdir", default="data/lab/eval")
+    lab_eval.add_argument("--anomaly-model", default="data/model/anomaly")
+    lab_eval.add_argument("--scan-model", default="data/model/scan")
+    lab_eval.add_argument("--brute-model", default="data/model/brute")
+    lab_eval.add_argument("--beacon-model", default="data/model/beacon")
+    lab_eval.add_argument("--dns-model", default="data/model/dns")
+    lab_eval.add_argument("--enrichment", default=None)
+    lab_eval.set_defaults(func=_cmd_lab_eval)
+
+    elk_export = subparsers.add_parser(
+        "elk-export", help="write fused alerts to Elasticsearch"
+    )
+    elk_export.add_argument("--alerts", default="data/lab/eval/alerts.jsonl")
+    elk_export.add_argument("--index", default="ndr-alerts")
+    elk_export.set_defaults(func=_cmd_elk_export)
+
     demo = subparsers.add_parser("demo", help="run the full synthetic pipeline")
     demo.add_argument("--workdir", default="data/demo")
     demo.add_argument("--seed", type=int, default=42)
@@ -796,7 +861,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
-    except (ValueError, FileNotFoundError) as exc:
+    except (ValueError, FileNotFoundError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
