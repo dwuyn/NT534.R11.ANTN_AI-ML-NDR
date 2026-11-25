@@ -1,6 +1,6 @@
 # Tiến độ triển khai NDR + AI/ML
 
-> Cập nhật lần cuối: 2026-11-19  
+> Cập nhật lần cuối: 2026-11-25  
 > Nguồn phase/detector: [`03-implementation-plan.md`](./03-implementation-plan.md) (P0–P4, D1–D9)  
 > Quy ước trạng thái: `Chưa bắt đầu` · `Đang làm` · `Hoàn thành (synthetic)` · `Hoàn thành (lab)` · `Tạm hoãn`
 
@@ -20,17 +20,19 @@
 | LLM remote provider | Đang làm | `ndr/llm/provider.py`, `tests/unit/test_llm_provider.py`; runbook `05-kaggle-ngrok-llm.md` | OpenAI-compatible/ngrok client; chưa chạy GPU Kaggle thật |
 | Response guardrail | Hoàn thành (synthetic) | `ndr/response/`; `uv run ndr response-sim ...` | 35 allowed, 5 denied (4 risk, 1 confidence); allowlist/TTL/rate-limit/rollback covered by tests |
 | E2E prelab | Hoàn thành (synthetic) | `ndr/prelab.py`; `uv run ndr prelab-demo --workdir /tmp/ndr-prelab --seed 42` | 6 attack scenarios; risk 135 → 40 (70.37% reduction); 36 triage; 40 response decisions |
+| Dataset-first public baseline | Đang làm | `ndr/datasets.py`; `uv run ndr dataset-prep`; `uv run ndr dataset-train` | D1–D7 train từ UWF/CIC/MTA/GraphTunnel; D6 synthetic; chưa lab-validated |
+| Docker inference | Đang làm | `Dockerfile`, `ndr/runtime.py`, `deploy/`; `ndr-ml:0.2.0` smoke pass | Chưa chạy target ML VM/ELK; chưa shadow mode |
 | NDR thật (Zeek/ELK) | Đang làm | Tài liệu thiết kế; chưa có log Zeek/lab thật | Cần chốt schema, mẫu log, ECS/index template |
 
 ## 2. Tiến độ theo pha
 
 | Pha | Gate | Trạng thái | Đã có | Còn thiếu |
 |---|---|---|---|---|
-| P0 — Nền tảng dữ liệu và baseline | Replay 6 kịch bản; baseline rule-only | Đang làm | Synthetic harness, contracts, ground truth, D1/D2/D3/D4/D5/D6/D7 corpus | Log Zeek thật, ECS/index template, Filebeat/bus, baseline rule-only |
+| P0 — Nền tảng dữ liệu và baseline | Replay 6 kịch bản; baseline rule-only | Đang làm | Synthetic harness, contracts, public dataset adapters, D1–D7 corpus, Docker inference | Log Zeek target, ECS/index template, Filebeat/bus, baseline rule-only |
 | P1 — Anomaly detection real-time | Score end-to-end; FP trong ngưỡng | Đang làm | D1 offline pipeline + tests; threshold/FP report | Bus/Redis, inference service, Elasticsearch/Kibana dashboard |
-| P2 — Supervised detectors | Mỗi kịch bản đạt ngưỡng tối thiểu | Hoàn thành (synthetic) | D2/D3/D4/D5/D6/D7 synthetic; recall >= 0.85, test FP/day <= 10 | Xác nhận lại trên log lab thật |
+| P2 — Supervised detectors | Mỗi kịch bản đạt ngưỡng tối thiểu | Đang làm | D2/D3/D4/D5/D6/D7 synthetic + public baseline; Docker smoke pass | Xác nhận lại trên log lab thật; D4/D6 chưa lab |
 | P3 — Risk fusion, response, LLM | Alert queue; auto-block an toàn | Đang làm | D8 risk fusion; D9 mock triage; response simulator; E2E 6 kịch bản synthetic | Kibana triage/feedback, LLM provider thật, alert queue thật |
-| P4 — MLOps, đánh giá cuối, demo | Tái lập + demo thành công | Chưa bắt đầu | — | MLflow registry, CI, drift, shadow/canary, báo cáo cuối |
+| P4 — MLOps, đánh giá cuối, demo | Tái lập + demo thành công | Đang làm | Docker image + inference runtime; dataset/model summaries | MLflow registry, CI, drift, shadow/canary, báo cáo cuối |
 
 ## 3. Detector
 
@@ -56,6 +58,15 @@
 | 2026-11-14 | D8 risk fusion | 57 tests toàn bộ; 58 raw D5/D7 alerts → 16 alerts; reduction 72.41%; MITRE coverage 100%; 12 critical/4 low; 4 D1 corroboration events | `uv run pytest -q`; `uv run ndr risk-demo --workdir /tmp/ndr-risk-demo --seed 42` |
 | 2026-11-14 | Pre-lab D2/D3/D4/D6/D9 + response + E2E | 158 tests toàn bộ; D2 215, D3 66, D4 384, D6 54 detections; cả 6 detector supervised recall 1.00, test FP/day 0.00; risk 135 → 40 (70.37%); 36 triage; 35 allowed/5 denied | `uv run pytest -q`; `uv run ndr prelab-demo --workdir /tmp/ndr-prelab --seed 42`; 4 detector demos; `uv run ndr llm-eval` |
 | 2026-11-19 | LLM provider OpenAI-compatible/ngrok | Thêm `OpenAICompatibleProvider`, CLI `--provider openai`, env `NDR_LLM_*`, test request/auth/error/guardrail; runbook Kaggle+ngrok | `uv run pytest -q tests/unit/test_llm_provider.py`; `uv run ndr llm-eval --help` |
+| 2026-11-25 | Dataset-first public training + Docker inference | 216 tests; `dataset-prep` D1 72 / D2 78 / D3 12 / D4 12 / D5 51 / D6 12 / D7 36; train 7/7 model; `ndr-ml:0.2.0` smoke D3=1, D7=6, 3 alerts; image `sha256:086af15b...`; package `dist/ndr-ml-0.2.0.tar.gz` sha256 `4170e18a...` | `uv run pytest -q`; `uv run ndr dataset-prep --root data/datasets --out data/runs`; `uv run ndr dataset-train --runs data/runs --models models`; `docker build -t ndr-ml:0.2.0 .`; `docker run --rm -v /tmp/ndr-smoke-out:/work ndr-ml:0.2.0 infer --runs /opt/ndr/smoke/runs --models /models --workdir /work` |
+
+### Ghi chú dataset-first + Docker
+
+- `dataset-prep` tạo 7 run root; D6 vẫn synthetic vì chưa có public SMB/DCE-RPC đủ 6 attack run.
+- Public models là baseline, **không phải lab-validated**; D2/D3/D4/D5/D6/D7 metadata đạt recall 1.00 / FP 0 trên split public synthetic, nhưng chưa đo FP/ngày trên benign lab.
+- `ndr-ml:0.2.0` chứa code + `models/` + smoke runs; smoke test chạy trong container, D3/D7 có detection, `alerts.jsonl` hợp lệ.
+- Chưa chạy target ML VM, chưa export ELK thật, chưa shadow mode; các bước này cần `ML_HOST`, SSH sensor, ES API key/CA.
+- `dist/ndr-ml-0.2.0.tar.gz` là artifact local, đã gitignore; không chứa secret.
 
 ### Ghi chú triển khai D8
 
