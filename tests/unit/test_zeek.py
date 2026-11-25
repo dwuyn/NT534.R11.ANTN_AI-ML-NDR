@@ -81,6 +81,16 @@ def test_malformed_json_reports_path_and_line(tmp_path: Path) -> None:
     assert f"{path}:1" in str(error.value)
 
 
+def test_flat_zeek_id_fields_are_accepted() -> None:
+    obj = _obj()
+    conn_id = obj.pop("id")
+    obj["id.orig_h"] = conn_id["orig_h"]
+    obj["id.orig_p"] = conn_id["orig_p"]
+    obj["id.resp_h"] = conn_id["resp_h"]
+    obj["id.resp_p"] = conn_id["resp_p"]
+    assert parse_conn_obj(obj).orig_h == "10.0.0.1"
+
+
 def test_missing_id_is_rejected() -> None:
     with pytest.raises(ValueError, match="missing field id"):
         parse_conn_obj({"ts": 1, "uid": "C", "proto": "tcp"})

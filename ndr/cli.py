@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from dataclasses import asdict
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from ndr.anomaly.report import build_report
@@ -16,6 +16,7 @@ from ndr.beacon.score import score_beacon
 from ndr.beacon.train import train_beacon
 from ndr.brute.score import score_brute
 from ndr.brute.train import train_brute
+from ndr.datasets import prepare_datasets, train_datasets
 from ndr.dns.score import score_dns
 from ndr.dns.train import train_dns
 from ndr.elk import ElkConfig, export_alerts
@@ -31,6 +32,7 @@ from ndr.prelab import run_prelab
 from ndr.reporting.model_card import write_model_card
 from ndr.response.engine import ResponseSimulator, decide_response
 from ndr.response.policy import ResponsePolicy, load_allowlist
+from ndr.runtime import model_dirs_from_root, prepare_live_run, run_infer
 from ndr.risk.engine import (
     build_alerts,
     demo_enrichment,
@@ -472,6 +474,76 @@ def _cmd_elk_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_dataset_prep(args: argparse.Namespace) -> int:
+    summary = prepare_datasets(
+        root=Path(args.root),
+        out_dir=Path(args.out),
+        seed=args.seed,
+        zeek=args.zeek,
+    )
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+def _cmd_dataset_train(args: argparse.Namespace) -> int:
+    summary = train_datasets(
+        runs_dir=Path(args.runs),
+        models_dir=Path(args.models),
+        seed=args.seed,
+    )
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+def _parse_window(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        raise ValueError("window timestamps must include a timezone")
+    return parsed
+
+
+def _cmd_infer(args: argparse.Namespace) -> int:
+    workdir = Path(args.workdir)
+    if args.raw:
+        if args.window_minutes != 10:
+            raise ValueError("--window-minutes must be 10")
+        if bool(args.window_start) != bool(args.window_end):
+            raise ValueError("--window-start and --window-end must be used together")
+        if args.window_start:
+            start = _parse_window(args.window_start)
+            end = _parse_window(args.window_end)
+        else:
+            now = datetime.now(UTC)
+            end = datetime.fromtimestamp(
+                (int(now.timestamp()) // 600) * 600, tz=UTC
+            )
+            start = end - timedelta(minutes=args.window_minutes)
+        workdir.mkdir(parents=True, exist_ok=True)
+        runs_root = workdir / "runs"
+        runs_root.mkdir(parents=True, exist_ok=True)
+        prepare_live_run(
+            [Path(path) for path in args.raw],
+            runs_root,
+            start,
+            end,
+        )
+        runs_dir = runs_root
+    else:
+        if args.window_start or args.window_end:
+            raise ValueError("window args require --raw")
+        runs_dir = Path(args.runs)
+
+    summary = run_infer(
+        runs_dir=runs_dir,
+        workdir=workdir,
+        model_dirs=model_dirs_from_root(Path(args.models)),
+        enrichment_path=Path(args.enrichment) if args.enrichment else None,
+        export_elk=args.export_elk,
+    )
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
 def _add_detector_commands(
     subparsers,
     *,
@@ -906,6 +978,38 @@ def _build_parser() -> argparse.ArgumentParser:
     elk_export.add_argument("--alerts", default="data/lab/eval/alerts.jsonl")
     elk_export.add_argument("--index", default="ndr-alerts")
     elk_export.set_defaults(func=_cmd_elk_export)
+
+    dataset_prep = subparsers.add_parser(
+        "dataset-prep", help="build training runs from public datasets"
+    )
+    dataset_prep.add_argument("--root", required=True)
+    dataset_prep.add_argument("--out", required=True)
+    dataset_prep.add_argument("--seed", type=int, default=42)
+    dataset_prep.add_argument("--zeek", default="zeek")
+    dataset_prep.set_defaults(func=_cmd_dataset_prep)
+
+    dataset_train = subparsers.add_parser(
+        "dataset-train", help="train all detectors from prepared dataset runs"
+    )
+    dataset_train.add_argument("--runs", required=True)
+    dataset_train.add_argument("--models", required=True)
+    dataset_train.add_argument("--seed", type=int, default=42)
+    dataset_train.set_defaults(func=_cmd_dataset_train)
+
+    infer = subparsers.add_parser(
+        "infer", help="score live or prepared runs and write alerts"
+    )
+    source = infer.add_mutually_exclusive_group(required=True)
+    source.add_argument("--raw", action="append", help="raw Zeek log directory")
+    source.add_argument("--runs", help="prepared run directory")
+    infer.add_argument("--models", required=True)
+    infer.add_argument("--workdir", required=True)
+    infer.add_argument("--window-minutes", type=int, default=10)
+    infer.add_argument("--window-start", default=None)
+    infer.add_argument("--window-end", default=None)
+    infer.add_argument("--enrichment", default=None)
+    infer.add_argument("--export-elk", action="store_true")
+    infer.set_defaults(func=_cmd_infer)
 
     demo = subparsers.add_parser("demo", help="run the full synthetic pipeline")
     demo.add_argument("--workdir", default="data/demo")

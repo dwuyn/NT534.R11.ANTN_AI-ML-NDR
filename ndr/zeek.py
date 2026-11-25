@@ -101,9 +101,7 @@ def parse_conn_obj(obj: dict, where: str = "<obj>") -> ConnRecord:
     for name in ("ts", "uid", "proto"):
         _require(obj, name, where)
 
-    conn_id = obj.get("id")
-    if not isinstance(conn_id, dict):
-        raise ValueError(f"{where}: missing field id")
+    conn_id = _conn_id(obj, where)
     for name in ("orig_h", "orig_p", "resp_h", "resp_p"):
         _require(conn_id, name, where, prefix="id.")
 
@@ -155,9 +153,7 @@ def parse_dns_obj(obj: dict, where: str = "<obj>") -> DnsRecord:
     for name in ("ts", "uid", "query"):
         _require(obj, name, where)
 
-    dns_id = obj.get("id")
-    if not isinstance(dns_id, dict):
-        raise ValueError(f"{where}: missing field id")
+    dns_id = _conn_id(obj, where)
     for name in ("orig_h", "resp_h"):
         _require(dns_id, name, where, prefix="id.")
 
@@ -194,6 +190,8 @@ def iter_dns_jsonl(path: Path) -> Iterator[DnsRecord]:
                 raise ValueError(f"{path}:{lineno}: invalid JSON: {exc.msg}") from exc
             if not isinstance(obj, dict):
                 raise ValueError(f"{path}:{lineno}: expected a JSON object")
+            if not obj.get("query"):
+                continue
             yield parse_dns_obj(obj, where=f"{path}:{lineno}")
 
 
@@ -354,10 +352,23 @@ def _ts(obj: dict, where: str) -> float:
         raise ValueError(f"{where}: invalid field ts: {obj['ts']!r}") from exc
 
 
-def _endpoints(obj: dict, where: str) -> tuple[str, int, str, int]:
+def _conn_id(obj: dict, where: str) -> dict:
     conn_id = obj.get("id")
-    if not isinstance(conn_id, dict):
-        raise ValueError(f"{where}: missing field id")
+    if isinstance(conn_id, dict):
+        return conn_id
+    flat = {
+        "orig_h": obj.get("id.orig_h"),
+        "orig_p": obj.get("id.orig_p"),
+        "resp_h": obj.get("id.resp_h"),
+        "resp_p": obj.get("id.resp_p"),
+    }
+    if flat["orig_h"] is not None and flat["resp_h"] is not None:
+        return flat
+    raise ValueError(f"{where}: missing field id")
+
+
+def _endpoints(obj: dict, where: str) -> tuple[str, int, str, int]:
+    conn_id = _conn_id(obj, where)
     for name in ("orig_h", "resp_h"):
         _require(conn_id, name, where, prefix="id.")
     return (

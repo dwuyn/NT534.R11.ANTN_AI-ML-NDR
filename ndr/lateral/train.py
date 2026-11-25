@@ -166,6 +166,8 @@ def train_lateral(
     threshold = ensure_above_benign(
         float(np.quantile(val_benign_scores, quantile)),
         val_benign_scores,
+        val_scores,
+        y_val,
     )
 
     test_fp = int(np.sum((test_scores >= threshold) & (y_test == 0)))

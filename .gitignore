@@ -65,6 +65,8 @@ zeek-logs/
 *.h5
 *.keras
 models/saved/
+models/
+artifacts/smoke/
 
 # Editor / IDE
 .vscode/

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -95,6 +96,15 @@ def test_missing_query_is_rejected() -> None:
     del obj["query"]
     with pytest.raises(ValueError, match="missing field query"):
         parse_dns_obj(obj)
+
+
+def test_stream_skips_rows_without_query(tmp_path: Path) -> None:
+    path = tmp_path / "dns.jsonl"
+    obj = _obj()
+    del obj["query"]
+    path.write_text(json.dumps(obj) + "\n" + json.dumps(_obj()) + "\n", encoding="utf-8")
+    records = list(iter_dns_jsonl(path))
+    assert len(records) == 1
 
 
 def test_missing_nested_dns_id_field_is_rejected() -> None:

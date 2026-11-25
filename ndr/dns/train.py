@@ -46,9 +46,14 @@ def _labels(snapshots: list) -> np.ndarray:
 
 
 def _snapshots_for_run(
-    run: GroundTruthRun, dns_path: Path, baseline
+    run: GroundTruthRun,
+    dns_path: Path,
+    baseline,
+    min_events: int = DNS_MIN_EVENTS,
 ) -> list:
-    snapshots = build_dns_snapshots(list(iter_dns_jsonl(dns_path)), baseline)
+    snapshots = build_dns_snapshots(
+        list(iter_dns_jsonl(dns_path)), baseline, min_events=min_events
+    )
     for snapshot in snapshots:
         snapshot.label = (
             1
@@ -63,6 +68,7 @@ def train_dns(
     out_dir: Path,
     seed: int = 42,
     target_fp_per_day: float = TARGET_FP_PER_DAY,
+    min_events: int = DNS_MIN_EVENTS,
 ) -> ModelMetadata:
     runs = discover_runs(input_dir, "dns.jsonl")
     benign = [(run, path) for run, path in runs if run.kind == "benign"]
@@ -95,15 +101,27 @@ def train_dns(
 
     train_snapshots = []
     for run, dns_path in train_runs:
-        train_snapshots.extend(_snapshots_for_run(run, dns_path, baseline))
+        train_snapshots.extend(
+            _snapshots_for_run(
+                run, dns_path, baseline, min_events=min_events
+            )
+        )
     baseline = finalize_dns_profile(baseline, train_snapshots)
 
     val_snapshots = []
     for run, dns_path in val_runs:
-        val_snapshots.extend(_snapshots_for_run(run, dns_path, baseline))
+        val_snapshots.extend(
+            _snapshots_for_run(
+                run, dns_path, baseline, min_events=min_events
+            )
+        )
     test_snapshots = []
     for run, dns_path in test_runs:
-        test_snapshots.extend(_snapshots_for_run(run, dns_path, baseline))
+        test_snapshots.extend(
+            _snapshots_for_run(
+                run, dns_path, baseline, min_events=min_events
+            )
+        )
 
     x_train, y_train = _matrix(train_snapshots), _labels(train_snapshots)
     x_val, y_val = _matrix(val_snapshots), _labels(val_snapshots)
@@ -214,7 +232,7 @@ def train_dns(
             "positive_windows": int(np.sum(y_train)),
             "negative_windows": int(np.sum(y_train == 0)),
             "window_seconds": DNS_WINDOW_SECONDS,
-            "min_events": DNS_MIN_EVENTS,
+            "min_events": min_events,
             "lexical_weight": LEXICAL_WEIGHT,
             "target_fp_per_day": target_fp_per_day,
             "threshold_quantile": quantile,

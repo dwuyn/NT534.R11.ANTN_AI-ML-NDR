@@ -46,9 +46,14 @@ def _labels(snapshots: list) -> np.ndarray:
 
 
 def _snapshots_for_run(
-    run: GroundTruthRun, run_dir: Path, baseline: BruteBaselineProfile
+    run: GroundTruthRun,
+    run_dir: Path,
+    baseline: BruteBaselineProfile,
+    min_events: int = BRUTE_MIN_EVENTS,
 ) -> list:
-    snapshots = build_brute_snapshots(load_auth_records(run_dir), baseline)
+    snapshots = build_brute_snapshots(
+        load_auth_records(run_dir), baseline, min_events=min_events
+    )
     for snapshot in snapshots:
         snapshot.label = (
             1
@@ -63,6 +68,7 @@ def train_brute(
     out_dir: Path,
     seed: int = 42,
     target_fp_per_day: float = TARGET_FP_PER_DAY,
+    min_events: int = BRUTE_MIN_EVENTS,
 ) -> ModelMetadata:
     runs = discover_runs(input_dir, "ssh.jsonl")
     benign = [(run, path) for run, path in runs if run.kind == "benign"]
@@ -92,17 +98,25 @@ def train_brute(
     train_snapshots = []
     for run, ssh_path in train_runs:
         train_snapshots.extend(
-            _snapshots_for_run(run, ssh_path.parent, baseline)
+            _snapshots_for_run(
+                run, ssh_path.parent, baseline, min_events=min_events
+            )
         )
     baseline = finalize_brute_profile(baseline, train_snapshots)
 
     val_snapshots = []
     for run, ssh_path in val_runs:
-        val_snapshots.extend(_snapshots_for_run(run, ssh_path.parent, baseline))
+        val_snapshots.extend(
+            _snapshots_for_run(
+                run, ssh_path.parent, baseline, min_events=min_events
+            )
+        )
     test_snapshots = []
     for run, ssh_path in test_runs:
         test_snapshots.extend(
-            _snapshots_for_run(run, ssh_path.parent, baseline)
+            _snapshots_for_run(
+                run, ssh_path.parent, baseline, min_events=min_events
+            )
         )
 
     x_train, y_train = _matrix(train_snapshots), _labels(train_snapshots)
@@ -160,6 +174,8 @@ def train_brute(
     threshold = ensure_above_benign(
         float(np.quantile(val_benign_scores, quantile)),
         val_benign_scores,
+        val_scores,
+        y_val,
     )
 
     test_fp = int(np.sum((test_scores >= threshold) & (y_test == 0)))
@@ -209,7 +225,7 @@ def train_brute(
             "positive_windows": int(np.sum(y_train)),
             "negative_windows": int(np.sum(y_train == 0)),
             "window_seconds": BRUTE_WINDOW_SECONDS,
-            "min_events": BRUTE_MIN_EVENTS,
+            "min_events": min_events,
             "target_fp_per_day": target_fp_per_day,
             "threshold_quantile": quantile,
             "n_entities": n_entities,

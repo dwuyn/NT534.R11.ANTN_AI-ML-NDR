@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+args=("$@")
+pcap=""
+for ((i = 0; i < ${#args[@]}; i++)); do
+  if [[ "${args[$i]}" == "-r" && $((i + 1)) -lt ${#args[@]} ]]; then
+    pcap="${args[$((i + 1))]}"
+    break
+  fi
+done
+if [[ -z "$pcap" ]]; then
+  echo "zeek-docker: expected -r <pcap>" >&2
+  exit 2
+fi
+pcap_abs="$(realpath "$pcap")"
+pcap_dir="$(dirname "$pcap_abs")"
+pcap_name="$(basename "$pcap_abs")"
+out_dir="$(pwd -P)"
+for ((i = 0; i < ${#args[@]}; i++)); do
+  if [[ "${args[$i]}" == "-r" ]]; then
+    args[$((i + 1))]="/in/$pcap_name"
+  fi
+done
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  -v "$pcap_dir:/in:ro" \
+  -v "$out_dir:/out" \
+  -w /out \
+  zeek/zeek:latest zeek "${args[@]}"

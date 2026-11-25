@@ -26,12 +26,31 @@ from ndr.risk.engine import (
 from ndr.risk.report import build_risk_report
 from ndr.scan.score import score_scan
 
-LAB_LOG_TYPES = ("conn", "dns", "ssh", "ftp")
+LAB_LOG_TYPES = (
+    "conn",
+    "dns",
+    "ssh",
+    "ftp",
+    "http",
+    "files",
+    "ssl",
+    "intel",
+    "smb_mapping",
+    "smb_files",
+    "dce_rpc",
+)
 LAB_LOG_FILENAMES = {
     "conn": ("conn.log", "conn.log.gz"),
     "dns": ("dns.log", "dns.log.gz"),
     "ssh": ("ssh.log", "ssh.log.gz"),
     "ftp": ("ftp.log", "ftp.log.gz"),
+    "http": ("http.log", "http.log.gz"),
+    "files": ("files.log", "files.log.gz"),
+    "ssl": ("ssl.log", "ssl.log.gz"),
+    "intel": ("intel.log", "intel.log.gz"),
+    "smb_mapping": ("smb_mapping.log", "smb_mapping.log.gz"),
+    "smb_files": ("smb_files.log", "smb_files.log.gz"),
+    "dce_rpc": ("dce_rpc.log", "dce_rpc.log.gz"),
 }
 LAB_ATTACK_SCENARIOS = frozenset(
     {"port_scan", "brute_force", "c2_beaconing", "dns_tunneling"}
@@ -116,6 +135,7 @@ def prepare_lab_runs(
     raw_roots: Sequence[Path],
     manifest: Sequence[GroundTruthRun],
     out_dir: Path,
+    require_events: bool = True,
 ) -> list[Path]:
     roots = [Path(root) for root in raw_roots]
     for root in roots:
@@ -191,11 +211,12 @@ def prepare_lab_runs(
                 raise ValueError(
                     f"no supported Zeek log files under {', '.join(map(str, roots))}"
                 )
-            for run in runs:
-                if counts[run.run_id] == 0:
-                    raise ValueError(
-                        f"{run.run_id}: no supported events in manifest window"
-                    )
+            if require_events:
+                for run in runs:
+                    if counts[run.run_id] == 0:
+                        raise ValueError(
+                            f"{run.run_id}: no supported events in manifest window"
+                        )
             for run in runs:
                 (out_dir / run.run_id / "run.json").write_text(
                     run.model_dump_json(indent=2), encoding="utf-8"

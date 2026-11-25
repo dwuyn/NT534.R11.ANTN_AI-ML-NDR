@@ -1,0 +1,1 @@
+*/10 * * * * ndr /opt/ndr/run-infer.sh >> /var/log/ndr/infer.log 2>&1

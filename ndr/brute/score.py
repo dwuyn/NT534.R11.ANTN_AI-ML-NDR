@@ -13,6 +13,7 @@ from ndr.contracts import DetectionEvent, ModelInfo, ModelMetadata, RuleInfo
 from ndr.features.brute import (
     BRUTE_FEATURE_NAMES,
     BRUTE_FEATURE_SET_VERSION,
+    BRUTE_MIN_EVENTS,
     build_brute_snapshots,
     load_auth_records,
     load_brute_profile,
@@ -36,11 +37,14 @@ def score_brute(
     baseline = load_brute_profile(model_dir / "brute_baseline.json")
     lgbm = joblib.load(model_dir / "lgbm.joblib")
     calibrator = joblib.load(model_dir / "calibrator.joblib")
+    min_events = int(metadata.training.get("min_events", BRUTE_MIN_EVENTS))
 
     events: list[DetectionEvent] = []
     for _, ssh_path in discover_runs(input_dir, "ssh.jsonl"):
         snapshots = build_brute_snapshots(
-            load_auth_records(ssh_path.parent), baseline
+            load_auth_records(ssh_path.parent),
+            baseline,
+            min_events=min_events,
         )
         if not snapshots:
             continue

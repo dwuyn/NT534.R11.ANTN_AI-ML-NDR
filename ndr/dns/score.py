@@ -17,6 +17,7 @@ from ndr.features.dns import (
     build_dns_snapshots,
 )
 from ndr.features.dns_baseline import load_dns_profile
+from ndr.features.windows import DNS_MIN_EVENTS
 from ndr.zeek import iter_dns_jsonl
 
 
@@ -37,12 +38,15 @@ def score_dns(
     baseline = load_dns_profile(model_dir / "dns_baseline.json")
     lgbm = joblib.load(model_dir / "lgbm.joblib")
     calibrator = joblib.load(model_dir / "calibrator.joblib")
+    min_events = int(metadata.training.get("min_events", DNS_MIN_EVENTS))
     tunnel_index = DNS_FEATURE_NAMES.index("tunnel_score")
 
     events: list[DetectionEvent] = []
     for _, dns_path in discover_runs(input_dir, "dns.jsonl"):
         snapshots = build_dns_snapshots(
-            list(iter_dns_jsonl(dns_path)), baseline
+            list(iter_dns_jsonl(dns_path)),
+            baseline,
+            min_events=min_events,
         )
         if not snapshots:
             continue

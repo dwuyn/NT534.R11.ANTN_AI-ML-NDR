@@ -73,7 +73,19 @@ def test_prepare_splits_deduplicates_and_writes_run_manifest(
 
     for run in runs:
         run_dir = out / run.run_id
-        for log_type in ("conn", "dns", "ssh", "ftp"):
+        for log_type in (
+            "conn",
+            "dns",
+            "ssh",
+            "ftp",
+            "http",
+            "files",
+            "ssl",
+            "intel",
+            "smb_mapping",
+            "smb_files",
+            "dce_rpc",
+        ):
             assert (run_dir / f"{log_type}.jsonl").is_file()
         assert GroundTruthRun.model_validate_json(
             (run_dir / "run.json").read_text(encoding="utf-8")
@@ -90,7 +102,7 @@ def test_prepare_rejects_missing_raw_root(tmp_path: Path) -> None:
 def test_prepare_rejects_no_supported_logs(tmp_path: Path) -> None:
     raw = tmp_path / "raw"
     raw.mkdir()
-    (raw / "http.log").write_text(_event(10, "H10") + "\n", encoding="utf-8")
+    (raw / "weird.log").write_text(_event(10, "W10") + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="no supported Zeek log files"):
         prepare_lab_runs([raw], [_run("a", 10, 20)], tmp_path / "runs")
 
